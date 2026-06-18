@@ -1238,6 +1238,12 @@ func (r *Reconciler) reconcileInstance(
 		addDevSHM(&instance.Spec.Template)
 	}
 
+	// mount the temporary volume to every Postgres instance container when requested
+	if err == nil && spec.Volumes != nil && spec.Volumes.Temp != nil &&
+		spec.Volumes.Temp.Containers == v1beta1.PostgresTempVolumeContainersAll {
+		postgres.AddTempVolumeMounts(&instance.Spec.Template)
+	}
+
 	// mount additional volumes to the Postgres instance containers
 	if err == nil && spec.Volumes != nil && len(spec.Volumes.Additional) > 0 {
 		missingContainers := util.AddAdditionalVolumesAndMounts(&instance.Spec.Template.Spec, spec.Volumes.Additional)

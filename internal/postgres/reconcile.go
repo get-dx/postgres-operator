@@ -263,8 +263,8 @@ func InstancePod(ctx context.Context,
 
 	// Mount an ephemeral volume, if specified.
 	if inInstanceSpec.Volumes != nil && inInstanceSpec.Volumes.Temp != nil {
-		tmpVolumeMount := TempVolumeMount()
-		tmpVolume := corev1.Volume{Name: tmpVolumeMount.Name}
+		mount := TempVolumeMount()
+		tmpVolume := corev1.Volume{Name: mount.Name}
 		tmpVolume.Ephemeral = &corev1.EphemeralVolumeSource{
 			VolumeClaimTemplate: &corev1.PersistentVolumeClaimTemplate{
 				Spec: inInstanceSpec.Volumes.Temp.AsPersistentVolumeClaimSpec(),
@@ -275,7 +275,9 @@ func InstancePod(ctx context.Context,
 		tmpVolume.Ephemeral.VolumeClaimTemplate.Annotations = outInstancePod.Annotations
 		tmpVolume.Ephemeral.VolumeClaimTemplate.Labels = outInstancePod.Labels
 
-		container.VolumeMounts = append(container.VolumeMounts, tmpVolumeMount)
+		if inInstanceSpec.Volumes.Temp.Containers != v1beta1.PostgresTempVolumeContainersAll {
+			container.VolumeMounts = append(container.VolumeMounts, mount)
+		}
 		outInstancePod.Spec.Volumes = append(outInstancePod.Spec.Volumes, tmpVolume)
 	}
 
@@ -289,6 +291,32 @@ func InstancePod(ctx context.Context,
 	}
 
 	outInstancePod.Spec.InitContainers = []corev1.Container{startup}
+
+	if inInstanceSpec.Volumes != nil && inInstanceSpec.Volumes.Temp != nil &&
+		inInstanceSpec.Volumes.Temp.Containers == v1beta1.PostgresTempVolumeContainersAll {
+		AddTempVolumeMounts(outInstancePod)
+	}
+}
+
+// AddTempVolumeMounts mounts the PostgreSQL temporary volume in every container
+// and init container in pod.
+func AddTempVolumeMounts(pod *corev1.PodTemplateSpec) {
+	mount := TempVolumeMount()
+	for i := range pod.Spec.Containers {
+		appendVolumeMount(&pod.Spec.Containers[i], mount)
+	}
+	for i := range pod.Spec.InitContainers {
+		appendVolumeMount(&pod.Spec.InitContainers[i], mount)
+	}
+}
+
+func appendVolumeMount(container *corev1.Container, mount corev1.VolumeMount) {
+	for _, existing := range container.VolumeMounts {
+		if existing.Name == mount.Name {
+			return
+		}
+	}
+	container.VolumeMounts = append(container.VolumeMounts, mount)
 }
 
 // PodSecurityContext returns a v1.PodSecurityContext for cluster that can write
