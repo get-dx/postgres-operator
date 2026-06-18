@@ -741,6 +741,10 @@ volumes:
 - mountPath: /pgtmp
   name: postgres-temp
 `), "expected temp mount in %q container", pod.Spec.Containers[0].Name)
+		assert.Assert(t, !hasVolumeMount(pod.Spec.Containers[1], "postgres-temp"),
+			"did not expect default temp mount in %q container", pod.Spec.Containers[1].Name)
+		assert.Assert(t, !hasVolumeMount(pod.Spec.InitContainers[0], "postgres-temp"),
+			"did not expect default temp mount in %q container", pod.Spec.InitContainers[0].Name)
 
 		assert.Assert(t, cmp.MarshalContains(pod.Spec.Volumes, `
 - ephemeral:
@@ -778,7 +782,76 @@ volumes:
   name: postgres-temp
 `), "expected definition in the pod")
 		})
+
+		t.Run("AllContainers", func(t *testing.T) {
+			instance := new(v1beta1.PostgresInstanceSetSpec)
+			require.UnmarshalInto(t, &instance, `{
+				volumes: { temp: {
+					containers: all,
+					resources: { requests: { storage: 99Mi } },
+					storageClassName: somesuch,
+				} },
+			}`)
+
+			pod := new(corev1.PodTemplateSpec)
+			InstancePod(ctx, cluster, instance,
+				serverSecretProjection, clientSecretProjection, dataVolume, nil, nil, parameters, pod)
+
+			for _, container := range pod.Spec.Containers {
+				assert.Assert(t, hasVolumeMount(container, "postgres-temp"),
+					"expected temp mount in %q container", container.Name)
+			}
+			for _, container := range pod.Spec.InitContainers {
+				assert.Assert(t, hasVolumeMount(container, "postgres-temp"),
+					"expected temp mount in %q container", container.Name)
+			}
+		})
 	})
+}
+
+func TestAddTempVolumeMounts(t *testing.T) {
+	pod := &corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			InitContainers: []corev1.Container{
+				{Name: "postgres-startup"},
+				{Name: "nss-wrapper-init"},
+			},
+			Containers: []corev1.Container{
+				{Name: "database", VolumeMounts: []corev1.VolumeMount{TempVolumeMount()}},
+				{Name: "pgbackrest"},
+				{Name: "exporter"},
+			},
+		},
+	}
+
+	AddTempVolumeMounts(pod)
+	AddTempVolumeMounts(pod)
+
+	for _, container := range pod.Spec.InitContainers {
+		assert.Assert(t, hasVolumeMount(container, "postgres-temp"),
+			"expected temp mount in %q init container", container.Name)
+	}
+	for _, container := range pod.Spec.Containers {
+		assert.Assert(t, hasVolumeMount(container, "postgres-temp"),
+			"expected temp mount in %q container", container.Name)
+
+		var count int
+		for _, mount := range container.VolumeMounts {
+			if mount.Name == "postgres-temp" {
+				count++
+			}
+		}
+		assert.Equal(t, count, 1)
+	}
+}
+
+func hasVolumeMount(container corev1.Container, name string) bool {
+	for _, mount := range container.VolumeMounts {
+		if mount.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func TestPodSecurityContext(t *testing.T) {
