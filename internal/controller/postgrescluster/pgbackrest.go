@@ -1255,8 +1255,9 @@ func (r *Reconciler) reconcileRestoreJob(ctx context.Context,
 
 	for i, instanceSpec := range cluster.Spec.InstanceSets {
 		if instanceSpec.Name == instanceSetName {
+			instanceSpec := &cluster.Spec.InstanceSets[i]
 			opts = append(opts, "--link-map=pg_wal="+
-				postgres.WALDirectory(cluster, &cluster.Spec.InstanceSets[i]))
+				postgres.WALDirectory(cluster, instanceSpec))
 		}
 	}
 
@@ -1313,6 +1314,12 @@ func (r *Reconciler) reconcileRestoreJob(ctx context.Context,
 	if err := r.generateRestoreJobIntent(cluster, configHash, instanceName, cmd,
 		volumeMounts, volumes, dataSource, restoreJob); err != nil {
 		return errors.WithStack(err)
+	}
+
+	for i, instanceSpec := range cluster.Spec.InstanceSets {
+		if instanceSpec.Name == instanceSetName {
+			addTempVolumeToRestorePod(&cluster.Spec.InstanceSets[i], &restoreJob.Spec.Template)
+		}
 	}
 
 	// add pgBackRest configs to template
@@ -1416,6 +1423,34 @@ func (r *Reconciler) generateRestoreJobIntent(cluster *v1beta1.PostgresCluster,
 	}
 
 	return nil
+}
+
+func addTempVolumeToRestorePod(
+	instanceSpec *v1beta1.PostgresInstanceSetSpec, template *corev1.PodTemplateSpec,
+) {
+	if instanceSpec == nil || instanceSpec.Volumes == nil || instanceSpec.Volumes.Temp == nil ||
+		instanceSpec.Volumes.Temp.Containers != v1beta1.PostgresTempVolumeContainersAll {
+		return
+	}
+
+	mount := postgres.TempVolumeMount()
+	for i := range template.Spec.Containers {
+		if template.Spec.Containers[i].Name == naming.PGBackRestRestoreContainerName {
+			template.Spec.Containers[i].VolumeMounts = append(template.Spec.Containers[i].VolumeMounts, mount)
+		}
+	}
+
+	volume := corev1.Volume{Name: mount.Name}
+	volume.Ephemeral = &corev1.EphemeralVolumeSource{
+		VolumeClaimTemplate: &corev1.PersistentVolumeClaimTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: template.Annotations,
+				Labels:      template.Labels,
+			},
+			Spec: instanceSpec.Volumes.Temp.AsPersistentVolumeClaimSpec(),
+		},
+	}
+	template.Spec.Volumes = append(template.Spec.Volumes, volume)
 }
 
 // reconcilePGBackRest is responsible for reconciling any/all pgBackRest resources owned by a
