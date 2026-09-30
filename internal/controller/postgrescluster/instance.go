@@ -1238,9 +1238,9 @@ func (r *Reconciler) reconcileInstance(
 		addDevSHM(&instance.Spec.Template)
 	}
 
-	// mount the temporary volume to every Postgres instance container when requested
-	if err == nil && spec.Volumes != nil && spec.Volumes.Temp != nil &&
-		spec.Volumes.Temp.Containers == v1beta1.PostgresTempVolumeContainersAll {
+	// Mount a configured temporary volume in every container, including sidecars
+	// and init containers added after InstancePod.
+	if err == nil && spec.Volumes != nil && spec.Volumes.Temp != nil {
 		postgres.AddTempVolumeMounts(&instance.Spec.Template)
 	}
 

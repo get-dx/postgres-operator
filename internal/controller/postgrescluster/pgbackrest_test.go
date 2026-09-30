@@ -3748,18 +3748,28 @@ func TestGenerateRestoreJobIntent(t *testing.T) {
 }
 
 func TestAddTempVolumeToRestorePod(t *testing.T) {
+	t.Run("NoTempVolume", func(t *testing.T) {
+		for _, instance := range []*v1beta1.PostgresInstanceSetSpec{
+			nil, {}, {Volumes: &v1beta1.PostgresVolumesSpec{}},
+		} {
+			template := &corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: naming.PGBackRestRestoreContainerName}},
+			}}
+			before := template.DeepCopy()
+			addTempVolumeToRestorePod(instance, template)
+			assert.DeepEqual(t, template, before)
+		}
+	})
+
 	instance := &v1beta1.PostgresInstanceSetSpec{
 		Volumes: &v1beta1.PostgresVolumesSpec{
-			Temp: &v1beta1.PostgresTempVolumeSpec{
-				VolumeClaimSpec: v1beta1.VolumeClaimSpec{
-					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-					Resources: corev1.VolumeResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceStorage: resource.MustParse("1Gi"),
-						},
+			Temp: &v1beta1.VolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("1Gi"),
 					},
 				},
-				Containers: v1beta1.PostgresTempVolumeContainersAll,
 			},
 		},
 	}

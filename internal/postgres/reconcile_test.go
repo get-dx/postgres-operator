@@ -6,6 +6,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"gotest.tools/v3/assert"
@@ -741,10 +742,10 @@ volumes:
 - mountPath: /pgtmp
   name: postgres-temp
 `), "expected temp mount in %q container", pod.Spec.Containers[0].Name)
-		assert.Assert(t, !hasVolumeMount(pod.Spec.Containers[1], "postgres-temp"),
-			"did not expect default temp mount in %q container", pod.Spec.Containers[1].Name)
-		assert.Assert(t, !hasVolumeMount(pod.Spec.InitContainers[0], "postgres-temp"),
-			"did not expect default temp mount in %q container", pod.Spec.InitContainers[0].Name)
+		assert.Assert(t, hasVolumeMount(pod.Spec.Containers[1], "postgres-temp"),
+			"expected temp mount in %q container", pod.Spec.Containers[1].Name)
+		assert.Assert(t, hasVolumeMount(pod.Spec.InitContainers[0], "postgres-temp"),
+			"expected temp mount in %q container", pod.Spec.InitContainers[0].Name)
 
 		assert.Assert(t, cmp.MarshalContains(pod.Spec.Volumes, `
 - ephemeral:
@@ -783,15 +784,14 @@ volumes:
 `), "expected definition in the pod")
 		})
 
-		t.Run("AllContainers", func(t *testing.T) {
+		t.Run("LegacyFieldIgnored", func(t *testing.T) {
+			// Older installed schemas may still default this now-removed field.
 			instance := new(v1beta1.PostgresInstanceSetSpec)
-			require.UnmarshalInto(t, &instance, `{
-				volumes: { temp: {
-					containers: all,
-					resources: { requests: { storage: 99Mi } },
-					storageClassName: somesuch,
-				} },
-			}`)
+			assert.NilError(t, json.Unmarshal([]byte(`{"volumes":{"temp":{
+				"containers":"database",
+				"resources":{"requests":{"storage":"99Mi"}},
+				"storageClassName":"somesuch"
+			}}}`), instance))
 
 			pod := new(corev1.PodTemplateSpec)
 			InstancePod(ctx, cluster, instance,
@@ -806,6 +806,22 @@ volumes:
 					"expected temp mount in %q container", container.Name)
 			}
 		})
+	})
+
+	t.Run("NoTempVolume", func(t *testing.T) {
+		for _, instance := range []*v1beta1.PostgresInstanceSetSpec{
+			{}, {Volumes: &v1beta1.PostgresVolumesSpec{}},
+		} {
+			pod := new(corev1.PodTemplateSpec)
+			InstancePod(ctx, cluster, instance,
+				serverSecretProjection, clientSecretProjection, dataVolume, nil, nil, parameters, pod)
+			for _, container := range append(pod.Spec.Containers, pod.Spec.InitContainers...) {
+				assert.Assert(t, !hasVolumeMount(container, "postgres-temp"))
+			}
+			for _, volume := range pod.Spec.Volumes {
+				assert.Assert(t, volume.Name != "postgres-temp")
+			}
+		}
 	})
 }
 

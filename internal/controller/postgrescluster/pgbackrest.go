@@ -1428,8 +1428,7 @@ func (r *Reconciler) generateRestoreJobIntent(cluster *v1beta1.PostgresCluster,
 func addTempVolumeToRestorePod(
 	instanceSpec *v1beta1.PostgresInstanceSetSpec, template *corev1.PodTemplateSpec,
 ) {
-	if instanceSpec == nil || instanceSpec.Volumes == nil || instanceSpec.Volumes.Temp == nil ||
-		instanceSpec.Volumes.Temp.Containers != v1beta1.PostgresTempVolumeContainersAll {
+	if instanceSpec == nil || instanceSpec.Volumes == nil || instanceSpec.Volumes.Temp == nil {
 		return
 	}
 

@@ -11395,16 +11395,6 @@ spec:
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: atomic
-                              containers:
-                                default: database
-                                description: |-
-                                  The containers in which to mount the temporary volume. The default mounts
-                                  the temporary volume only in the database container.
-                                enum:
-                                  - all
-                                  - database
-                                maxLength: 8
-                                type: string
                               dataSource:
                                 description: |-
                                   dataSource field can be used to specify either:
@@ -30592,16 +30582,6 @@ spec:
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: atomic
-                              containers:
-                                default: database
-                                description: |-
-                                  The containers in which to mount the temporary volume. The default mounts
-                                  the temporary volume only in the database container.
-                                enum:
-                                  - all
-                                  - database
-                                maxLength: 8
-                                type: string
                               dataSource:
                                 description: |-
                                   dataSource field can be used to specify either:

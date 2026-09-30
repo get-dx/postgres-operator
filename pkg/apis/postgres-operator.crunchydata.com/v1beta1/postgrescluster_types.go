@@ -541,26 +541,7 @@ type PostgresVolumesSpec struct {
 	// More info: https://kubernetes.io/docs/concepts/storage/ephemeral-volumes
 	// ---
 	// +optional
-	Temp *PostgresTempVolumeSpec `json:"temp,omitempty"`
-}
-
-type PostgresTempVolumeContainers string
-
-const (
-	PostgresTempVolumeContainersAll      PostgresTempVolumeContainers = "all"
-	PostgresTempVolumeContainersDatabase PostgresTempVolumeContainers = "database"
-)
-
-// PostgresTempVolumeSpec defines an ephemeral volume for temporary files.
-type PostgresTempVolumeSpec struct {
-	VolumeClaimSpec `json:",inline"`
-
-	// The containers in which to mount the temporary volume. The default mounts
-	// the temporary volume only in the database container.
-	// +kubebuilder:validation:Enum=all;database
-	// +kubebuilder:default=database
-	// +optional
-	Containers PostgresTempVolumeContainers `json:"containers,omitempty"`
+	Temp *VolumeClaimSpec `json:"temp,omitempty"`
 }
 
 type TablespaceVolume struct {

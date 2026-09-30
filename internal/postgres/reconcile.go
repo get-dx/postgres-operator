@@ -275,9 +275,6 @@ func InstancePod(ctx context.Context,
 		tmpVolume.Ephemeral.VolumeClaimTemplate.Annotations = outInstancePod.Annotations
 		tmpVolume.Ephemeral.VolumeClaimTemplate.Labels = outInstancePod.Labels
 
-		if inInstanceSpec.Volumes.Temp.Containers != v1beta1.PostgresTempVolumeContainersAll {
-			container.VolumeMounts = append(container.VolumeMounts, mount)
-		}
 		outInstancePod.Spec.Volumes = append(outInstancePod.Spec.Volumes, tmpVolume)
 	}
 
@@ -292,8 +289,7 @@ func InstancePod(ctx context.Context,
 
 	outInstancePod.Spec.InitContainers = []corev1.Container{startup}
 
-	if inInstanceSpec.Volumes != nil && inInstanceSpec.Volumes.Temp != nil &&
-		inInstanceSpec.Volumes.Temp.Containers == v1beta1.PostgresTempVolumeContainersAll {
+	if inInstanceSpec.Volumes != nil && inInstanceSpec.Volumes.Temp != nil {
 		AddTempVolumeMounts(outInstancePod)
 	}
 }
