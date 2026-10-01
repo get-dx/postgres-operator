@@ -3747,6 +3747,71 @@ func TestGenerateRestoreJobIntent(t *testing.T) {
 	}
 }
 
+func TestAddTempVolumeToRestorePod(t *testing.T) {
+	t.Run("NoTempVolume", func(t *testing.T) {
+		for _, instance := range []*v1beta1.PostgresInstanceSetSpec{
+			nil, {}, {Volumes: &v1beta1.PostgresVolumesSpec{}},
+		} {
+			template := &corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: naming.PGBackRestRestoreContainerName}},
+			}}
+			before := template.DeepCopy()
+			addTempVolumeToRestorePod(instance, template)
+			assert.DeepEqual(t, template, before)
+		}
+	})
+
+	instance := &v1beta1.PostgresInstanceSetSpec{
+		Volumes: &v1beta1.PostgresVolumesSpec{
+			Temp: &v1beta1.VolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("1Gi"),
+					},
+				},
+			},
+		},
+	}
+	template := &corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{"annotation": "value"},
+			Labels:      map[string]string{"label": "value"},
+		},
+		Spec: corev1.PodSpec{
+			InitContainers: []corev1.Container{{Name: naming.ContainerNSSWrapperInit}},
+			Containers: []corev1.Container{{
+				Name: naming.PGBackRestRestoreContainerName,
+			}, {
+				Name: "other",
+			}},
+		},
+	}
+
+	addTempVolumeToRestorePod(instance, template)
+
+	assert.Assert(t, cmp.MarshalContains(template.Spec.Containers[0].VolumeMounts, `- mountPath: /pgtmp
+  name: postgres-temp
+`))
+	assert.Equal(t, len(template.Spec.Containers[1].VolumeMounts), 0)
+	assert.Equal(t, len(template.Spec.InitContainers[0].VolumeMounts), 0)
+	assert.Assert(t, cmp.MarshalContains(template.Spec.Volumes, `- ephemeral:
+    volumeClaimTemplate:
+      metadata:
+        annotations:
+          annotation: value
+        labels:
+          label: value
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+  name: postgres-temp
+`))
+}
+
 func TestObserveRestoreEnv(t *testing.T) {
 	ctx := context.Background()
 	_, tClient := setupKubernetes(t)
